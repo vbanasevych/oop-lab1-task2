@@ -49,6 +49,8 @@
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0-rc.2.25502.107" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="9.0.111" />
+
+		<PackageReference Include="Microsoft.Maui.Essentials" Version="9.0.111" />
 	</ItemGroup>
 
 	<ItemGroup>

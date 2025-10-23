@@ -3,6 +3,12 @@ using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Maui.Storage;
 
 namespace oop_lab1_task2
 {
@@ -324,9 +330,127 @@ namespace oop_lab1_task2
             DisplayAlert("Не реалізовано", "Функціонал збереження ще не реалізовано.", "OK");
         }
 
+        //private async void SaveButton_Clicked(object sender, EventArgs e)
+        //{
+        //    Dictionary<string, string> dataToSave = new Dictionary<string, string>();
+        //    foreach (var cellPair in cellMap)
+        //    {
+        //        if (!string.IsNullOrWhiteSpace(cellPair.Value.Expression))
+        //        {
+        //            dataToSave[cellPair.Key] = cellPair.Value.Expression;
+        //        }
+        //    }
+
+        //    string jsonString;
+        //    try
+        //    {
+        //        var options = new JsonSerializerOptions { WriteIndented = true };
+        //        jsonString = JsonSerializer.Serialize(dataToSave, options);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        await DisplayAlert("Помилка", $"Не вдалося серіалізувати дані: {ex.Message}", "OK");
+        //        return;
+        //    }
+
+        //    try
+        //    {
+        //        if (FileSaver.IsDefault.IsSupported)
+        //        {
+        //            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonString));
+
+        //            var result = await FileSaver.Default.SaveAsync("MyExcelTable.json", stream, CancellationToken.None);
+
+        //            if (result.IsSuccessful)
+        //            {
+        //                await DisplayAlert("Успіх", $"Файл збережено: {result.FilePath}", "OK");
+        //            }
+        //            else
+        //            {
+        //                await DisplayAlert("Помилка", $"Не вдалося зберегти файл: {result.Exception?.Message ?? "Невідома помилка"}", "OK");
+        //            }
+        //        }
+        //        else
+        //        {
+        //            await DisplayAlert("Помилка", "Збереження файлів не підтримується на цій платформі.", "OK");
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        await DisplayAlert("Помилка", $"Під час збереження сталася помилка: {ex.Message}", "OK");
+        //    }
+        //}
+
+
         private async void ReadButton_Clicked(object sender, EventArgs e)
         {
-            await DisplayAlert("Не реалізовано", "Функціонал завантаження ще не реалізовано.", "OK");
+            var customFileType = new FilePickerFileType(
+                new Dictionary<DevicePlatform, IEnumerable<string>>
+                {
+            { DevicePlatform.WinUI, new[] { ".json" } },
+            { DevicePlatform.MacCatalyst, new[] { "json" } },
+            { DevicePlatform.Android, new[] { "application/json" } },
+            { DevicePlatform.iOS, new[] { "public.json" } },
+                });
+
+            var pickOptions = new PickOptions
+            {
+                PickerTitle = "Виберіть файл .json для завантаження",
+                FileTypes = customFileType,
+            };
+
+            try
+            {
+                FileResult? result = await FilePicker.Default.PickAsync(pickOptions);
+                if (result == null)
+                {
+                    return;
+                }
+
+                string jsonString = await File.ReadAllTextAsync(result.FullPath);
+
+                var loadedData = JsonSerializer.Deserialize<Dictionary<string, string>>(jsonString);
+
+                if (loadedData == null || loadedData.Count == 0)
+                {
+                    await DisplayAlert("Пустий файл", "Файл не містить даних для завантаження.", "OK");
+                    return;
+                }
+
+                ClearGrid();
+
+                foreach (var pair in loadedData)
+                {
+                    string cellName = pair.Key;
+                    string expression = pair.Value;
+
+                    if (cellMap.TryGetValue(cellName, out Cell? cell))
+                    {
+                        cell.Expression = expression;
+                    }
+                }
+
+                showExpression = true;
+                UpdateGridDisplay();
+                await RecalculateAllCells();
+
+                await DisplayAlert("Успіх", "Дані успішно завантажено.", "OK");
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Помилка", $"Не вдалося прочитати або завантажити файл: {ex.Message}", "OK");
+            }
+        }
+
+        private void ClearGrid()
+        {
+            foreach (var cell in cellMap.Values)
+            {
+                cell.Expression = "";
+                cell.Value = double.NaN;
+            }
+
+            UpdateGridDisplay();
         }
 
         private async void ExitButton_Clicked(object sender, EventArgs e)
