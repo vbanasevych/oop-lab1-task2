@@ -1,13 +1,16 @@
 ﻿using Microsoft.Maui.Controls;
 using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Maui.Storage;
+
 #if WINDOWS
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -20,13 +23,13 @@ namespace oop_lab1_task2
     {
         private List<List<Cell>> cellData = new List<List<Cell>>();
         private Dictionary<string, Cell> cellMap = new Dictionary<string, Cell>(StringComparer.OrdinalIgnoreCase);
-
         private int currentRowCount = 0;
         private int currentColumnCount = 20;
-
         private HashSet<string> currentlyCalculating = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
         private bool showExpression = true;
+        private Entry? currentSelectedEntry = null;
+        private string currentSelectedCellName = "";
+        
 
         public MainPage()
         {
@@ -41,18 +44,16 @@ namespace oop_lab1_task2
             grid.Children.Clear();
             grid.RowDefinitions.Clear();
             grid.ColumnDefinitions.Clear();
-
             currentRowCount = 50;
             currentColumnCount = 20;
-
             AddColumnsAndColumnLabels();
             AddRowsAndCellEntries();
+            textInput.Text = ""; 
         }
 
         private void AddColumnsAndColumnLabels()
         {
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
             for (int col = 0; col < currentColumnCount; col++)
             {
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -72,12 +73,10 @@ namespace oop_lab1_task2
         private void AddRowsAndCellEntries()
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
             for (int row = 0; row < currentRowCount; row++)
             {
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
                 var rowData = new List<Cell>();
-
                 var label = new Label
                 {
                     Text = (row + 1).ToString(),
@@ -85,7 +84,6 @@ namespace oop_lab1_task2
                     HorizontalOptions = LayoutOptions.Center,
                     Margin = new Thickness(5)
                 };
-
                 Grid.SetRow(label, row + 1);
                 Grid.SetColumn(label, 0);
                 grid.Children.Add(label);
@@ -96,20 +94,20 @@ namespace oop_lab1_task2
                     var cell = new Cell { Name = cellName, Value = double.NaN };
                     rowData.Add(cell);
                     cellMap[cellName] = cell;
-
                     var entry = new Entry
                     {
-                        Text = cell.Expression,
+                        Text = "",
                         VerticalOptions = LayoutOptions.Center,
                         HorizontalOptions = LayoutOptions.Fill,
                         StyleId = cellName
                     };
+                    entry.Focused += Entry_Focused;
                     entry.Unfocused += Entry_Unfocused;
-                    
                     Grid.SetRow(entry, row + 1);
                     Grid.SetColumn(entry, col + 1);
                     grid.Children.Add(entry);
                 }
+
                 cellData.Add(rowData);
             }
         }
@@ -124,6 +122,7 @@ namespace oop_lab1_task2
                 columnName = Convert.ToChar(65 + modulo) + columnName;
                 dividend = (dividend - modulo - 1) / 26;
             }
+
             return columnName;
         }
 
@@ -132,50 +131,65 @@ namespace oop_lab1_task2
             return GetColumnName(col + 1) + (row + 1).ToString();
         }
 
-        private bool CellNameToIndices(string cellName, out int row, out int col)
-        {
-            row = -1;
-            col = -1;
-            if (string.IsNullOrEmpty(cellName)) return false;
-
-            var match = Regex.Match(cellName.ToUpper(), @"^([A-Z]+)(\d+)$");
-            if (!match.Success) return false;
-
-            string colName = match.Groups[1].Value;
-            if (!int.TryParse(match.Groups[2].Value, out row) || row <= 0) return false;
-
-            row--;
-
-            col = 0;
-            foreach (char c in colName)
-            {
-                col = col * 26 + (c - 'A' + 1);
-            }
-            col--;
-
-            return row >= 0 && row < currentRowCount && col >= 0 && col < currentColumnCount;
-        }
-
-
-        private async void Entry_Unfocused(object? sender, FocusEventArgs e)
+        private void Entry_Focused(object? sender, FocusEventArgs e)
         {
             if (sender is Entry entry)
             {
-                string cellName = entry.StyleId;
-                if (cellMap.TryGetValue(cellName, out Cell? cell))
+                currentSelectedEntry = entry; 
+                currentSelectedCellName = entry.StyleId;
+
+                if (cellMap.TryGetValue(currentSelectedCellName, out Cell? cell))
                 {
-                    string newExpression = entry.Text;
-                    if (cell.Expression != newExpression)
-                    {
-                        cell.Expression = newExpression;
-                        cell.Value = double.NaN;
-                        await RecalculateCellAndDependents(cellName);
-                    }
+                    textInput.Text = cell.Expression;
+                }
+                else
+                {
+                    textInput.Text = string.Empty;
+                }
+            }
+        }
+
+        private void Entry_Unfocused(object? sender, FocusEventArgs e)
+        {
+            if (sender is Entry entry)
+            {
+                if (cellMap.TryGetValue(entry.StyleId, out Cell? cell))
+                {
                     UpdateCellDisplay(entry, cell);
                 }
             }
         }
 
+        private void TextInput_Completed(object sender, EventArgs e)
+        {
+            if (currentSelectedEntry != null && !string.IsNullOrEmpty(currentSelectedCellName) && cellMap.TryGetValue(currentSelectedCellName, out Cell? cell))
+            {
+                string newExpression = textInput.Text;
+                if (cell.Expression != newExpression)
+                {
+                    cell.Expression = newExpression;
+                    cell.Value = double.NaN;
+                    Dispatcher.Dispatch(() => UpdateCellDisplay(currentSelectedEntry, cell));
+                }
+            }
+        }
+        
+        private void TextInput_Unfocused(object sender, FocusEventArgs e)
+        {
+            TextInput_Completed(sender, EventArgs.Empty);
+        }
+
+        private async void CalculateButton_Clicked(object sender, EventArgs e)
+        {
+            showExpression = !showExpression;
+
+            if (!showExpression)
+            {
+                await RecalculateAllCells();
+            }
+            UpdateGridDisplay();
+        }
+        
         private async Task RecalculateCell(string cellName)
         {
             if (!cellMap.TryGetValue(cellName, out Cell? cell))
@@ -191,7 +205,6 @@ namespace oop_lab1_task2
             }
 
             currentlyCalculating.Add(cellName);
-
             try
             {
                 if (!string.IsNullOrEmpty(cell.Expression) && cell.Expression.StartsWith("="))
@@ -210,7 +223,8 @@ namespace oop_lab1_task2
                 {
                     cell.Value = 0.0;
                 }
-                else if (double.TryParse(cell.Expression, System.Globalization.CultureInfo.InvariantCulture, out double directValue))
+                else if (double.TryParse(cell.Expression, System.Globalization.CultureInfo.InvariantCulture,
+                             out double directValue))
                 {
                     cell.Value = directValue;
                 }
@@ -221,8 +235,9 @@ namespace oop_lab1_task2
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Помилка обчислення {cellName}: {ex.Message}");
+                Debug.WriteLine($"Помилка обчислення {cellName}: {ex.Message}");
                 cell.Value = double.NaN;
+                await DisplayAlert("Помилка обчислення", $"Помилка в клітинці {cellName}: {ex.Message}", "OK");
             }
             finally
             {
@@ -230,17 +245,11 @@ namespace oop_lab1_task2
             }
         }
 
-        private async Task RecalculateCellAndDependents(string changedCellName)
-        {
-            await RecalculateAllCells();
-            UpdateGridDisplay();
-        }
-
         public async Task<double> GetCellValue(string cellName)
         {
             if (!cellMap.TryGetValue(cellName, out Cell? cell))
             {
-                System.Diagnostics.Debug.WriteLine($"Помилка: Клітинка '{cellName}'. Посилання не знайдено");
+                Debug.WriteLine($"Помилка: Клітинка '{cellName}'. Посилання не знайдено");
                 return 0.0;
             }
 
@@ -248,20 +257,37 @@ namespace oop_lab1_task2
             {
                 await RecalculateCell(cellName);
             }
+
             return cell.Value;
         }
 
-
-        private async void CalculateButton_Clicked(object sender, EventArgs e)
+        private async Task RecalculateAllCells()
         {
-            showExpression = !showExpression;
-            if (!showExpression)
+            foreach (var cell in cellMap.Values)
             {
-                await RecalculateAllCells();
+                cell.Value = double.NaN;
             }
-            UpdateGridDisplay();
-        }
 
+            foreach (var cellName in cellMap.Keys.ToList())
+            {
+                if (cellMap.TryGetValue(cellName, out Cell? cell) && double.IsNaN(cell.Value))
+                {
+                    try
+                    {
+                        await RecalculateCell(cellName);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        Debug.WriteLine(ex.Message);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Помилка під час обчислювання клітинки: {cellName}: {ex.Message}");
+                    }
+                }
+            }
+        }
+        
         private void UpdateCellDisplay(Entry entry, Cell cell)
         {
             if (showExpression)
@@ -283,7 +309,7 @@ namespace oop_lab1_task2
                 }
                 else
                 {
-                    entry.Text = cell.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    entry.Text = cell.Value.ToString(System.Globalization.CultureInfo.InvariantCulture); // Значення
                 }
             }
         }
@@ -301,38 +327,6 @@ namespace oop_lab1_task2
                 }
             }
         }
-
-        private async Task RecalculateAllCells()
-        {
-            foreach (var cell in cellMap.Values)
-            {
-                cell.Value = double.NaN;
-            }
-            foreach (var cellName in cellMap.Keys.ToList())
-            {
-                if (cellMap.TryGetValue(cellName, out Cell? cell) && double.IsNaN(cell.Value))
-                {
-                    try
-                    {
-                        await RecalculateCell(cellName);
-                    }
-                    catch (InvalidOperationException ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine(ex.Message);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Помилка під час обчислювання клітинки: {cellName}: {ex.Message}");
-                    }
-                }
-            }
-        }
-
-
-        // private void SaveButton_Clicked(object sender, EventArgs e)
-        // {
-        //     DisplayAlert("Не реалізовано", "Функціонал збереження ще не реалізовано.", "OK");
-        // }
 
         private async void SaveButton_Clicked(object sender, EventArgs e)
         {
@@ -356,30 +350,27 @@ namespace oop_lab1_task2
                 await DisplayAlert("Помилка", $"Не вдалося серіалізувати дані: {ex.Message}", "OK");
                 return;
             }
-
 #if WINDOWS
-    try
-    {
-        var savePicker = new FileSavePicker();
-        savePicker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
-        savePicker.FileTypeChoices.Add("JSON Files", new List<string>() { ".json" });
-        savePicker.SuggestedFileName = "MyExcelTable";
-
-        var window = App.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
-        if (window == null) throw new InvalidOperationException("Не вдалося отримати вікно програми.");
-        InitializeWithWindow.Initialize(savePicker, WindowNative.GetWindowHandle(window));
-
-        StorageFile file = await savePicker.PickSaveFileAsync();
-        if (file != null)
-        {
-            await FileIO.WriteTextAsync(file, jsonString);
-            await DisplayAlert("Успіх", $"Файл збережено: {file.Path}", "OK");
-        }
-    }
-    catch (Exception ex)
-    {
-        await DisplayAlert("Помилка збереження (Windows)", $"Сталася помилка: {ex.Message}", "OK");
-    }
+            try
+            {
+                var savePicker = new FileSavePicker();
+                savePicker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+                savePicker.FileTypeChoices.Add("JSON Files", new List<string>() { ".json" });
+                savePicker.SuggestedFileName = "MyExcelTable";
+                var window = App.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
+                if (window == null) throw new InvalidOperationException("Не вдалося отримати вікно програми.");
+                InitializeWithWindow.Initialize(savePicker, WindowNative.GetWindowHandle(window));
+                StorageFile file = await savePicker.PickSaveFileAsync();
+                if (file != null)
+                {
+                    await FileIO.WriteTextAsync(file, jsonString);
+                    await DisplayAlert("Успіх", $"Файл збережено: {file.Path}", "OK");
+                }
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Помилка збереження (Windows)", $"Сталася помилка: {ex.Message}", "OK");
+            }
 #else
             await DisplayAlert("Помилка", "Збереження файлів підтримується тільки на Windows у цій версії.", "OK");
 #endif
@@ -387,21 +378,14 @@ namespace oop_lab1_task2
 
         private async void ReadButton_Clicked(object sender, EventArgs e)
         {
-            var customFileType = new FilePickerFileType(
-                new Dictionary<DevicePlatform, IEnumerable<string>>
-                {
-            { DevicePlatform.WinUI, new[] { ".json" } },
-            { DevicePlatform.MacCatalyst, new[] { "json" } },
-            { DevicePlatform.Android, new[] { "application/json" } },
-            { DevicePlatform.iOS, new[] { "public.json" } },
-                });
-
-            var pickOptions = new PickOptions
+            var customFileType = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
             {
-                PickerTitle = "Виберіть файл .json для завантаження",
-                FileTypes = customFileType,
-            };
-
+                { DevicePlatform.WinUI, new[] { ".json" } }, { DevicePlatform.MacCatalyst, new[] { "json" } },
+                { DevicePlatform.Android, new[] { "application/json" } },
+                { DevicePlatform.iOS, new[] { "public.json" } },
+            });
+            var pickOptions = new PickOptions
+                { PickerTitle = "Виберіть файл .json для завантаження", FileTypes = customFileType, };
             try
             {
                 FileResult? result = await FilePicker.Default.PickAsync(pickOptions);
@@ -410,10 +394,8 @@ namespace oop_lab1_task2
                     return;
                 }
 
-                string jsonString = await File.ReadAllTextAsync(result.FullPath);
-
+                string jsonString = await System.IO.File.ReadAllTextAsync(result.FullPath);
                 var loadedData = JsonSerializer.Deserialize<Dictionary<string, string>>(jsonString);
-
                 if (loadedData == null || loadedData.Count == 0)
                 {
                     await DisplayAlert("Пустий файл", "Файл не містить даних для завантаження.", "OK");
@@ -421,23 +403,22 @@ namespace oop_lab1_task2
                 }
 
                 ClearGrid();
-
                 foreach (var pair in loadedData)
                 {
-                    string cellName = pair.Key;
-                    string expression = pair.Value;
-
-                    if (cellMap.TryGetValue(cellName, out Cell? cell))
+                    if (cellMap.TryGetValue(pair.Key, out Cell? cell))
                     {
-                        cell.Expression = expression;
+                        cell.Expression = pair.Value;
                     }
                 }
-
                 showExpression = true;
                 UpdateGridDisplay();
-                await RecalculateAllCells();
-
                 await DisplayAlert("Успіх", "Дані успішно завантажено.", "OK");
+            }
+            catch (FileNotFoundException fnfEx) when (fnfEx.Message.Contains("FilePicker"))
+            {
+                await DisplayAlert("Помилка Конфігурації?",
+                    $"Не вдалося отримати доступ до FilePicker: {fnfEx.Message}. Перевірте налаштування MAUI Essentials.",
+                    "OK");
             }
             catch (Exception ex)
             {
@@ -476,7 +457,6 @@ namespace oop_lab1_task2
             {
                 int lastRowDataIndex = currentRowCount - 1;
                 int lastRowUIIndex = currentRowCount;
-
                 if (lastRowDataIndex < cellData.Count)
                 {
                     var rowToRemove = cellData[lastRowDataIndex];
@@ -484,6 +464,7 @@ namespace oop_lab1_task2
                     {
                         cellMap.Remove(cell.Name);
                     }
+
                     cellData.RemoveAt(lastRowDataIndex);
                 }
 
@@ -495,16 +476,16 @@ namespace oop_lab1_task2
                         childrenToRemove.Add(child);
                     }
                 }
+
                 foreach (var child in childrenToRemove)
                 {
                     grid.Children.Remove(child);
                 }
 
-                if (grid.RowDefinitions.Count > 1)
-                    grid.RowDefinitions.RemoveAt(grid.RowDefinitions.Count - 1);
-
+                if (grid.RowDefinitions.Count > 1) grid.RowDefinitions.RemoveAt(grid.RowDefinitions.Count - 1);
                 currentRowCount--;
-                Task.Run(async () => {
+                Task.Run(async () =>
+                {
                     await RecalculateAllCells();
                     UpdateGridDisplay();
                 });
@@ -517,7 +498,6 @@ namespace oop_lab1_task2
             {
                 int lastColDataIndex = currentColumnCount - 1;
                 int lastColUIIndex = currentColumnCount;
-
                 foreach (var rowData in cellData)
                 {
                     if (lastColDataIndex < rowData.Count)
@@ -535,16 +515,16 @@ namespace oop_lab1_task2
                         childrenToRemove.Add(child);
                     }
                 }
+
                 foreach (var child in childrenToRemove)
                 {
                     grid.Children.Remove(child);
                 }
 
-                if (grid.ColumnDefinitions.Count > 1)
-                    grid.ColumnDefinitions.RemoveAt(grid.ColumnDefinitions.Count - 1);
-
+                if (grid.ColumnDefinitions.Count > 1) grid.ColumnDefinitions.RemoveAt(grid.ColumnDefinitions.Count - 1);
                 currentColumnCount--;
-                Task.Run(async () => {
+                Task.Run(async () =>
+                {
                     await RecalculateAllCells();
                     UpdateGridDisplay();
                 });
@@ -555,29 +535,34 @@ namespace oop_lab1_task2
         {
             int newRowUIIndex = currentRowCount + 1;
             int newRowDataIndex = currentRowCount;
-
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var rowData = new List<Cell>();
-
-            var label = new Label { Text = newRowUIIndex.ToString(), VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(5) };
-            
+            var label = new Label
+            {
+                Text = newRowUIIndex.ToString(), VerticalOptions = LayoutOptions.Center,
+                HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(5)
+            };
             Grid.SetRow(label, newRowUIIndex);
             Grid.SetColumn(label, 0);
             grid.Children.Add(label);
-
             for (int col = 0; col < currentColumnCount; col++)
             {
                 var cellName = GetCellName(newRowDataIndex, col);
                 var cell = new Cell { Name = cellName, Value = double.NaN };
                 rowData.Add(cell);
                 cellMap[cellName] = cell;
-
-                var entry = new Entry { Text = "", VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Fill, StyleId = cellName };
+                var entry = new Entry
+                {
+                    Text = "", VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Fill,
+                    StyleId = cellName
+                };
+                entry.Focused += Entry_Focused;
                 entry.Unfocused += Entry_Unfocused;
                 Grid.SetRow(entry, newRowUIIndex);
                 Grid.SetColumn(entry, col + 1);
                 grid.Children.Add(entry);
             }
+
             if (cellData.Count == newRowDataIndex)
             {
                 cellData.Add(rowData);
@@ -594,20 +579,19 @@ namespace oop_lab1_task2
         {
             int newColUIIndex = currentColumnCount + 1;
             int newColDataIndex = currentColumnCount;
-
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var label = new Label { Text = GetColumnName(newColUIIndex), VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(5) };
-            
+            var label = new Label
+            {
+                Text = GetColumnName(newColUIIndex), VerticalOptions = LayoutOptions.Center,
+                HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(5)
+            };
             Grid.SetRow(label, 0);
             Grid.SetColumn(label, newColUIIndex);
             grid.Children.Add(label);
-
             for (int row = 0; row < currentRowCount; row++)
             {
                 var cellName = GetCellName(row, newColDataIndex);
                 var cell = new Cell { Name = cellName, Value = double.NaN };
-
                 if (row < cellData.Count)
                 {
                     if (cellData[row].Count == newColDataIndex)
@@ -619,14 +603,20 @@ namespace oop_lab1_task2
                         cellData[row].Insert(newColDataIndex, cell);
                     }
                 }
-                cellMap[cellName] = cell;
 
-                var entry = new Entry { Text = "", VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Fill, StyleId = cellName };
+                cellMap[cellName] = cell;
+                var entry = new Entry
+                {
+                    Text = "", VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Fill,
+                    StyleId = cellName
+                };
+                entry.Focused += Entry_Focused;
                 entry.Unfocused += Entry_Unfocused;
                 Grid.SetRow(entry, row + 1);
                 Grid.SetColumn(entry, newColUIIndex);
                 grid.Children.Add(entry);
             }
+
             currentColumnCount++;
         }
     }

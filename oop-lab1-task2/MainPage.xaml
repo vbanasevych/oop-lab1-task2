@@ -25,11 +25,12 @@
             <Button Clicked="AddRowButton_Clicked" Text="Додати рядок" />
             <Button Clicked="AddColumnButton_Clicked" Text="Додати стовпчик" />
         </StackLayout>
-        <Entry
-            x:Name="textInput"
-            Grid.Row="1"
-            Grid.ColumnSpan="2"
-            Placeholder="Введіть текст" />
+        <Entry x:Name="textInput"
+               Placeholder="Введіть текст"
+               Grid.Row="1"
+               Grid.ColumnSpan="2"
+               Completed="TextInput_Completed"
+               Unfocused="TextInput_Unfocused" />
         <ScrollView Grid.Row="2" Grid.ColumnSpan="2">
             <Grid x:Name="grid" />
         </ScrollView>
