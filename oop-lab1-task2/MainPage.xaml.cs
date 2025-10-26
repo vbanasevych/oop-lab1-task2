@@ -8,7 +8,11 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Maui.Storage;
+#if WINDOWS
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
+#endif
 
 namespace oop_lab1_task2
 {
@@ -325,62 +329,61 @@ namespace oop_lab1_task2
         }
 
 
-        private void SaveButton_Clicked(object sender, EventArgs e)
+        // private void SaveButton_Clicked(object sender, EventArgs e)
+        // {
+        //     DisplayAlert("Не реалізовано", "Функціонал збереження ще не реалізовано.", "OK");
+        // }
+
+        private async void SaveButton_Clicked(object sender, EventArgs e)
         {
-            DisplayAlert("Не реалізовано", "Функціонал збереження ще не реалізовано.", "OK");
+            Dictionary<string, string> dataToSave = new Dictionary<string, string>();
+            foreach (var cellPair in cellMap)
+            {
+                if (!string.IsNullOrWhiteSpace(cellPair.Value.Expression))
+                {
+                    dataToSave[cellPair.Key] = cellPair.Value.Expression;
+                }
+            }
+
+            string jsonString;
+            try
+            {
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                jsonString = JsonSerializer.Serialize(dataToSave, options);
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Помилка", $"Не вдалося серіалізувати дані: {ex.Message}", "OK");
+                return;
+            }
+
+#if WINDOWS
+    try
+    {
+        var savePicker = new FileSavePicker();
+        savePicker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+        savePicker.FileTypeChoices.Add("JSON Files", new List<string>() { ".json" });
+        savePicker.SuggestedFileName = "MyExcelTable";
+
+        var window = App.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
+        if (window == null) throw new InvalidOperationException("Не вдалося отримати вікно програми.");
+        InitializeWithWindow.Initialize(savePicker, WindowNative.GetWindowHandle(window));
+
+        StorageFile file = await savePicker.PickSaveFileAsync();
+        if (file != null)
+        {
+            await FileIO.WriteTextAsync(file, jsonString);
+            await DisplayAlert("Успіх", $"Файл збережено: {file.Path}", "OK");
         }
-
-        //private async void SaveButton_Clicked(object sender, EventArgs e)
-        //{
-        //    Dictionary<string, string> dataToSave = new Dictionary<string, string>();
-        //    foreach (var cellPair in cellMap)
-        //    {
-        //        if (!string.IsNullOrWhiteSpace(cellPair.Value.Expression))
-        //        {
-        //            dataToSave[cellPair.Key] = cellPair.Value.Expression;
-        //        }
-        //    }
-
-        //    string jsonString;
-        //    try
-        //    {
-        //        var options = new JsonSerializerOptions { WriteIndented = true };
-        //        jsonString = JsonSerializer.Serialize(dataToSave, options);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        await DisplayAlert("Помилка", $"Не вдалося серіалізувати дані: {ex.Message}", "OK");
-        //        return;
-        //    }
-
-        //    try
-        //    {
-        //        if (FileSaver.IsDefault.IsSupported)
-        //        {
-        //            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonString));
-
-        //            var result = await FileSaver.Default.SaveAsync("MyExcelTable.json", stream, CancellationToken.None);
-
-        //            if (result.IsSuccessful)
-        //            {
-        //                await DisplayAlert("Успіх", $"Файл збережено: {result.FilePath}", "OK");
-        //            }
-        //            else
-        //            {
-        //                await DisplayAlert("Помилка", $"Не вдалося зберегти файл: {result.Exception?.Message ?? "Невідома помилка"}", "OK");
-        //            }
-        //        }
-        //        else
-        //        {
-        //            await DisplayAlert("Помилка", "Збереження файлів не підтримується на цій платформі.", "OK");
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        await DisplayAlert("Помилка", $"Під час збереження сталася помилка: {ex.Message}", "OK");
-        //    }
-        //}
-
+    }
+    catch (Exception ex)
+    {
+        await DisplayAlert("Помилка збереження (Windows)", $"Сталася помилка: {ex.Message}", "OK");
+    }
+#else
+            await DisplayAlert("Помилка", "Збереження файлів підтримується тільки на Windows у цій версії.", "OK");
+#endif
+        }
 
         private async void ReadButton_Clicked(object sender, EventArgs e)
         {
