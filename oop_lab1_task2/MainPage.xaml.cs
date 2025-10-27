@@ -10,6 +10,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Maui.Storage;
+using Spreadsheet.Core;
+using Cell = Spreadsheet.Core.Cell;
 
 #if WINDOWS
 using Windows.Storage;
@@ -19,7 +21,7 @@ using WinRT.Interop;
 
 namespace oop_lab1_task2
 {
-    public partial class MainPage : ContentPage
+    public partial class MainPage : ContentPage, ICellValueProvider
     {
         private List<List<Cell>> cellData = new List<List<Cell>>();
         private Dictionary<string, Cell> cellMap = new Dictionary<string, Cell>(StringComparer.OrdinalIgnoreCase);
@@ -237,7 +239,7 @@ namespace oop_lab1_task2
                     }
                     else
                     {
-                        cell.Value = Calculator.Evaluate(formula, this);
+                        cell.Value = await Calculator.Evaluate(formula, this);
                     }
                 }
                 else if (string.IsNullOrWhiteSpace(cell.Expression))
@@ -330,7 +332,7 @@ namespace oop_lab1_task2
                 }
                 else
                 {
-                    entry.Text = cell.Value.ToString(System.Globalization.CultureInfo.InvariantCulture); // Значення
+                    entry.Text = cell.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 }
             }
         }

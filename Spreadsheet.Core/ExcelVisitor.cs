@@ -4,40 +4,41 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
-namespace oop_lab1_task2
+namespace Spreadsheet.Core
 {
-    public class ExcelVisitor : MyExelBaseVisitor<double>
+    public class ExcelVisitor : MyExelBaseVisitor<Task<double>>
     {
-        private readonly MainPage? mainPageContext;
+        private readonly ICellValueProvider _provider;
 
-        public ExcelVisitor(MainPage? context)
+        public ExcelVisitor(ICellValueProvider provider)
         {
-            mainPageContext = context ?? throw new ArgumentNullException(nameof(context));
+            _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         }
 
-        public override double VisitCompileUnit(MyExelParser.CompileUnitContext context)
+        public override async Task<double> VisitCompileUnit(MyExelParser.CompileUnitContext context)
         {
             Debug.WriteLine("Visiting CompileUnit");
-            return Visit(context.expression());
+            return await Visit(context.expression());
         }
 
-        public override double VisitNumberExpr(MyExelParser.NumberExprContext context)
+        public override Task<double> VisitNumberExpr(MyExelParser.NumberExprContext context)
         {
             var text = context.NUMBER().GetText();
             Debug.WriteLine($"Visiting NumberExpr: {text}");
-            return double.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
+            var result = double.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
+            return Task.FromResult(result);
         }
 
-        public override double VisitParenthesizedExpr(MyExelParser.ParenthesizedExprContext context)
+        public override async Task<double> VisitParenthesizedExpr(MyExelParser.ParenthesizedExprContext context)
         {
             Debug.WriteLine("Visiting ParenthesizedExpr");
-            return Visit(context.expression());
+            return await Visit(context.expression());
         }
 
-        public override double VisitUnaryExpr(MyExelParser.UnaryExprContext context)
+        public override async Task<double> VisitUnaryExpr(MyExelParser.UnaryExprContext context)
         {
             Debug.WriteLine($"Visiting UnaryExpr: {context.op.Text}");
-            var value = Visit(context.expression());
+            var value = await Visit(context.expression()); 
             if (context.op.Type == MyExelLexer.SUBTRACT)
             {
                 return -value;
@@ -45,11 +46,11 @@ namespace oop_lab1_task2
             return value;
         }
 
-        public override double VisitMultiplicativeExpr(MyExelParser.MultiplicativeExprContext context)
+        public override async Task<double> VisitMultiplicativeExpr(MyExelParser.MultiplicativeExprContext context)
         {
             Debug.WriteLine($"Visiting MultiplicativeExpr: {context.op.Text}");
-            var left = Visit(context.expression(0));
-            var right = Visit(context.expression(1));
+            var left = await Visit(context.expression(0));
+            var right = await Visit(context.expression(1));
 
             switch (context.op.Type)
             {
@@ -69,52 +70,51 @@ namespace oop_lab1_task2
             }
         }
 
-        public override double VisitAdditiveExpr(MyExelParser.AdditiveExprContext context)
+        public override async Task<double> VisitAdditiveExpr(MyExelParser.AdditiveExprContext context)
         {
             Debug.WriteLine($"Visiting AdditiveExpr: {context.op.Text}");
-            var left = Visit(context.expression(0));
-            var right = Visit(context.expression(1));
+            var left = await Visit(context.expression(0));
+            var right = await Visit(context.expression(1));
 
             if (context.op.Type == MyExelLexer.ADD) return left + right;
             return left - right; 
         }
 
-        public override double VisitFuncExpr(MyExelParser.FuncExprContext context)
+        public override async Task<double> VisitFuncExpr(MyExelParser.FuncExprContext context)
         {
             Debug.WriteLine($"Visiting FuncExpr: {context.funcName.Text}");
-            var value = Visit(context.expression());
-
+            var value = await Visit(context.expression()); 
+            
             if (context.funcName.Type == MyExelLexer.INC) return value + 1;
             return value - 1; 
         }
 
-        public override double VisitCellRefExpr(MyExelParser.CellRefExprContext context)
+        public override async Task<double> VisitCellRefExpr(MyExelParser.CellRefExprContext context)
         {
             var cellName = context.CELL_REF().GetText().ToUpper();
             Debug.WriteLine($"Visiting CellRefExpr for: {cellName}");
             
-            if (mainPageContext == null)
+            if (_provider == null)
             {
-                throw new InvalidOperationException($"Помилка: Посилання на клітинки ({cellName}) не можуть бути обчислені без контексту MainPage.");
+                throw new InvalidOperationException("Помилка: Провайдер комірок не ініціалізовано.");
             }
             
             try
             {
-                Task<double> valueTask = mainPageContext.GetCellValue(cellName);
-                double value = valueTask.GetAwaiter().GetResult();
+                double value = await _provider.GetCellValue(cellName);
 
                 Debug.WriteLine($"GetCellValue({cellName}) returned: {value}");
 
                 if (double.IsNaN(value))
                 {
                     Debug.WriteLine($"GetCellValue({cellName}) returned NaN. Throwing specific error.");
-                    throw new InvalidOperationException($"Посилання клітинки {cellName} призвело до помилки (значення NaN).");
+                    throw new InvalidOperationException($"Посилання клітинки {cellName} призвело до помилки (значення NaN або циклічне посилання).");
                 }
 
                 Debug.WriteLine($"VisitCellRefExpr({cellName}) returning successfully: {value}");
                 return value;
             }
-            catch (InvalidOperationException cycleEx) when (cycleEx.Message.Contains("Circular reference"))
+            catch (InvalidOperationException cycleEx) when (cycleEx.Message.Contains("циклічне посилання"))
             {
                 Debug.WriteLine($"VisitCellRefExpr({cellName}) caught circular reference: {cycleEx.Message}");
                 throw;
@@ -124,8 +124,6 @@ namespace oop_lab1_task2
                 Debug.WriteLine($"VisitCellRefExpr({cellName}) FAILED: Exception type {ex.GetType().Name} - {ex.Message}");
                 throw new InvalidOperationException($"Помилка отримання значення клітинки {cellName}.", ex);
             }
-
-            return double.NaN;
         }
     }
 }

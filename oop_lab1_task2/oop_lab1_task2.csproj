@@ -51,5 +51,9 @@
 		<PackageReference Include="Antlr4.Runtime" Version="4.6.6" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0-rc.2.25502.107" />
 	</ItemGroup>
+    
+	<ItemGroup>
+	  <ProjectReference Include="..\Spreadsheet.Core\Spreadsheet.Core.csproj" />
+	</ItemGroup>
 
 </Project>

@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace oop_lab1_task2
+namespace Spreadsheet.Core
 {
     public class Cell : INotifyPropertyChanged
     {

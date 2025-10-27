@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace oop_lab1_task2
+namespace Spreadsheet.Core
 {
     public class ThrowExceptionErrorListener : BaseErrorListener, IAntlrErrorListener<int>
     {
