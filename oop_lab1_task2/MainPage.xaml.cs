@@ -101,8 +101,11 @@ namespace oop_lab1_task2
                         HorizontalOptions = LayoutOptions.Fill,
                         StyleId = cellName
                     };
+                    
                     entry.Focused += Entry_Focused;
-                    entry.Unfocused += Entry_Unfocused;
+                    entry.Completed += Cell_ContentChanged;
+                    entry.Unfocused += Cell_ContentChanged;
+
                     Grid.SetRow(entry, row + 1);
                     Grid.SetColumn(entry, col + 1);
                     grid.Children.Add(entry);
@@ -141,6 +144,8 @@ namespace oop_lab1_task2
                 if (cellMap.TryGetValue(currentSelectedCellName, out Cell? cell))
                 {
                     textInput.Text = cell.Expression;
+                    
+                    entry.Text = cell.Expression; 
                 }
                 else
                 {
@@ -149,14 +154,25 @@ namespace oop_lab1_task2
             }
         }
 
-        private void Entry_Unfocused(object? sender, FocusEventArgs e)
+        private void Cell_ContentChanged(object? sender, EventArgs e)
         {
-            if (sender is Entry entry)
+            if (sender is not Entry entry) return;
+
+            if (cellMap.TryGetValue(entry.StyleId, out Cell? cell))
             {
-                if (cellMap.TryGetValue(entry.StyleId, out Cell? cell))
+                string newExpression = entry.Text;
+                if (cell.Expression != newExpression)
                 {
-                    UpdateCellDisplay(entry, cell);
+                    cell.Expression = newExpression;
+                    cell.Value = double.NaN; 
+                    
+                    if (currentSelectedCellName == entry.StyleId)
+                    {
+                        textInput.Text = newExpression;
+                    }
                 }
+
+                Dispatcher.Dispatch(() => UpdateCellDisplay(entry, cell));
             }
         }
 
@@ -177,6 +193,11 @@ namespace oop_lab1_task2
         private void TextInput_Unfocused(object sender, FocusEventArgs e)
         {
             TextInput_Completed(sender, EventArgs.Empty);
+
+            if (currentSelectedEntry != null && cellMap.TryGetValue(currentSelectedCellName, out Cell? cell))
+            {
+                UpdateCellDisplay(currentSelectedEntry, cell);
+            }
         }
 
         private async void CalculateButton_Clicked(object sender, EventArgs e)
@@ -304,7 +325,7 @@ namespace oop_lab1_task2
                     }
                     else
                     {
-                        entry.Text = "#ERR!";
+                        entry.Text = "#ERR!"; 
                     }
                 }
                 else
@@ -556,8 +577,11 @@ namespace oop_lab1_task2
                     Text = "", VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Fill,
                     StyleId = cellName
                 };
+             
                 entry.Focused += Entry_Focused;
-                entry.Unfocused += Entry_Unfocused;
+                entry.Completed += Cell_ContentChanged; 
+                entry.Unfocused += Cell_ContentChanged;
+                
                 Grid.SetRow(entry, newRowUIIndex);
                 Grid.SetColumn(entry, col + 1);
                 grid.Children.Add(entry);
@@ -610,8 +634,11 @@ namespace oop_lab1_task2
                     Text = "", VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Fill,
                     StyleId = cellName
                 };
+                
                 entry.Focused += Entry_Focused;
-                entry.Unfocused += Entry_Unfocused;
+                entry.Completed += Cell_ContentChanged;
+                entry.Unfocused += Cell_ContentChanged;
+                
                 Grid.SetRow(entry, row + 1);
                 Grid.SetColumn(entry, newColUIIndex);
                 grid.Children.Add(entry);
