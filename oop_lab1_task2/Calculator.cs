@@ -9,7 +9,7 @@ namespace oop_lab1_task2
 {
     public static class Calculator
     {
-        public static double Evaluate(string expression, MainPage context)
+        public static double Evaluate(string expression, MainPage? context)
         {
             var lexer = new MyExelLexer(new AntlrInputStream(expression));
             lexer.RemoveErrorListeners();

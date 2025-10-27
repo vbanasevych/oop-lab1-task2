@@ -8,9 +8,9 @@ namespace oop_lab1_task2
 {
     public class ExcelVisitor : MyExelBaseVisitor<double>
     {
-        private readonly MainPage mainPageContext;
+        private readonly MainPage? mainPageContext;
 
-        public ExcelVisitor(MainPage context)
+        public ExcelVisitor(MainPage? context)
         {
             mainPageContext = context ?? throw new ArgumentNullException(nameof(context));
         }
@@ -92,7 +92,12 @@ namespace oop_lab1_task2
         {
             var cellName = context.CELL_REF().GetText().ToUpper();
             Debug.WriteLine($"Visiting CellRefExpr for: {cellName}");
-
+            
+            if (mainPageContext == null)
+            {
+                throw new InvalidOperationException($"Помилка: Посилання на клітинки ({cellName}) не можуть бути обчислені без контексту MainPage.");
+            }
+            
             try
             {
                 Task<double> valueTask = mainPageContext.GetCellValue(cellName);
@@ -109,12 +114,11 @@ namespace oop_lab1_task2
                 Debug.WriteLine($"VisitCellRefExpr({cellName}) returning successfully: {value}");
                 return value;
             }
-            
             catch (InvalidOperationException cycleEx) when (cycleEx.Message.Contains("Circular reference"))
             {
                 Debug.WriteLine($"VisitCellRefExpr({cellName}) caught circular reference: {cycleEx.Message}");
+                throw;
             }
-
             catch (Exception ex)
             {
                 Debug.WriteLine($"VisitCellRefExpr({cellName}) FAILED: Exception type {ex.GetType().Name} - {ex.Message}");
