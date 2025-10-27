@@ -1,16 +1,15 @@
 ﻿using Android.App;
 using Android.Runtime;
 
-namespace oop_lab1_task2
-{
-    [Application]
-    public class MainApplication : MauiApplication
-    {
-        public MainApplication(IntPtr handle, JniHandleOwnership ownership)
-            : base(handle, ownership)
-        {
-        }
+namespace oop_lab1_task2;
 
-        protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
+[Application]
+public class MainApplication : MauiApplication
+{
+    public MainApplication(IntPtr handle, JniHandleOwnership ownership)
+        : base(handle, ownership)
+    {
     }
+
+    protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
 }
