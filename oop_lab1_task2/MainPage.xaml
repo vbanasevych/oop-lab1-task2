@@ -15,6 +15,8 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <StackLayout Orientation="Horizontal">
+            <Button Text="Новий" Clicked="NewButton_Clicked" />
+            
             <Button Clicked="SaveButton_Clicked" Text="Зберегти" />
             <Button Clicked="ReadButton_Clicked" Text="Прочитати" />
             <Button Clicked="ExitButton_Clicked" Text="Вийти" />

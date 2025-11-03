@@ -217,17 +217,17 @@ namespace oop_lab1_task2
         {
             if (!cellMap.TryGetValue(cellName, out Cell? cell))
             {
-                throw new ArgumentException($"ПОМИЛКА: Клітинка '{cellName}' не знайдена під час перерахунку.");
+                throw new ArgumentException($"ПОМИЛКА: Клітинка '{cellName}' не знайдена.");
             }
 
             if (currentlyCalculating.Contains(cellName))
             {
                 cell.Value = double.NaN;
-                await DisplayAlert("Помилка", $"Виявлено циклічне посилання за участю клітинки {cellName}", "OK");
-                return;
+                throw new InvalidOperationException($"Виявлено циклічне посилання.");
             }
 
             currentlyCalculating.Add(cellName);
+
             try
             {
                 if (!string.IsNullOrEmpty(cell.Expression) && cell.Expression.StartsWith("="))
@@ -240,14 +240,14 @@ namespace oop_lab1_task2
                     else
                     {
                         cell.Value = await Calculator.Evaluate(formula, this);
+                        
                     }
                 }
                 else if (string.IsNullOrWhiteSpace(cell.Expression))
                 {
                     cell.Value = 0.0;
                 }
-                else if (double.TryParse(cell.Expression, System.Globalization.CultureInfo.InvariantCulture,
-                             out double directValue))
+                else if (double.TryParse(cell.Expression, System.Globalization.CultureInfo.InvariantCulture, out double directValue))
                 {
                     cell.Value = directValue;
                 }
@@ -256,11 +256,11 @@ namespace oop_lab1_task2
                     cell.Value = double.NaN;
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) 
             {
                 Debug.WriteLine($"Помилка обчислення {cellName}: {ex.Message}");
                 cell.Value = double.NaN;
-                await DisplayAlert("Помилка обчислення", $"Помилка в клітинці {cellName}: {ex.Message}", "OK");
+                throw; 
             }
             finally
             {
@@ -291,6 +291,9 @@ namespace oop_lab1_task2
                 cell.Value = double.NaN;
             }
 
+            bool errorShown = false;
+            string firstErrorMessage = "";
+
             foreach (var cellName in cellMap.Keys.ToList())
             {
                 if (cellMap.TryGetValue(cellName, out Cell? cell) && double.IsNaN(cell.Value))
@@ -299,15 +302,22 @@ namespace oop_lab1_task2
                     {
                         await RecalculateCell(cellName);
                     }
-                    catch (InvalidOperationException ex)
-                    {
-                        Debug.WriteLine(ex.Message);
-                    }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Помилка під час обчислювання клітинки: {cellName}: {ex.Message}");
+                        Debug.WriteLine($"Помилка під час обчислювання клітинки {cellName}: {ex.Message}");
+                
+                        if (!errorShown)
+                        {
+                            firstErrorMessage = ex.Message;
+                            errorShown = true;
+                        }
                     }
                 }
+            }
+
+            if (errorShown)
+            {
+                await DisplayAlert("Помилка обчислення", firstErrorMessage, "OK");
             }
         }
         
@@ -350,7 +360,23 @@ namespace oop_lab1_task2
                 }
             }
         }
+        
+        private async void NewButton_Clicked(object sender, EventArgs e)
+        {
+            bool answer = await DisplayAlert(
+                "Створити нову таблицю?",
+                "Всі незбережені зміни буде втрачено. Ви впевнені?",
+                "Так, Створити",
+                "Скасувати"
+            );
 
+            if (!answer)
+            {
+                return; 
+            }
+
+            CreateGrid();
+        }
         private async void SaveButton_Clicked(object sender, EventArgs e)
         {
             Dictionary<string, string> dataToSave = new Dictionary<string, string>();
@@ -471,7 +497,7 @@ namespace oop_lab1_task2
 
         private async void HelpButton_Clicked(object sender, EventArgs e)
         {
-            await DisplayAlert("Довідка", "Лабораторна робота 1. Студентки Банасевич Вікторії", "OK");
+            await DisplayAlert("Довідка", "Лабораторна робота 1. Студентки Банасевич Вікторії. \nВаріант №2 (операції: +, -, *, / (бінарні операції); mod, dіv; +, - (унарні операції); іnc, dec)", "OK");
         }
 
         private void DeleteRowButton_Clicked(object sender, EventArgs e)
